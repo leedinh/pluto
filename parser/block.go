@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -51,5 +52,25 @@ func NewBlock(client *ethclient.Client, c *context.Context, number uint64) *Bloc
 		Hash:         block.Hash().Hex(),
 		Time:         block.Time(),
 		Transactions: GetTransactions(block),
+	}
+}
+
+func QueryTransactions(txs *[]Transaction) {
+	for _, tx := range *txs {
+		log.Println(tx.Hash)
+	}
+}
+
+func QueryTransactionByHash(client *ethclient.Client, c *context.Context, hash string) Transaction {
+	tx, _, err := client.TransactionByHash(*c, common.HexToHash(hash))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return Transaction{
+		Hash:  tx.Hash().Hex(),
+		To:    tx.To().Hex(),
+		Value: tx.Value().String(),
+		Nonce: tx.Nonce(),
+		Data:  tx.Data(),
 	}
 }

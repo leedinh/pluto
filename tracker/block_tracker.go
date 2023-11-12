@@ -36,7 +36,8 @@ func (bt *BlockTracker) Execute(c *context.Context, wg *sync.WaitGroup) {
 		go func(block_num uint64) {
 			defer wg_block.Done()
 			block := parser.NewBlock(bt.client, c, block_num)
-			fmt.Println(block)
+			fmt.Println("Querying block ", block.Number)
+			parser.QueryTransactions(block.Transactions)
 		}(block_num)
 	}
 	wg_block.Wait()

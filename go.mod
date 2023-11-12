@@ -2,7 +2,12 @@ module github.com/leedinh/pluto
 
 go 1.20
 
-require github.com/ethereum/go-ethereum v1.13.4
+require (
+	github.com/boltdb/bolt v1.3.1
+	github.com/ethereum/go-ethereum v1.13.4
+)
+
+require golang.org/x/net v0.17.0 // indirect
 
 require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
@@ -16,6 +21,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/ethereum/c-kzg-4844 v0.3.1 // indirect
 	github.com/go-ole/go-ole v1.2.5 // indirect
+	github.com/go-resty/resty/v2 v2.7.0
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/holiman/uint256 v1.2.3 // indirect
