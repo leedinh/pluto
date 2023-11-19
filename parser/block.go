@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -46,6 +47,9 @@ func NewBlock(client *ethclient.Client, c *context.Context, number uint64) *Bloc
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	time.Sleep(1 * time.Second)
+
 	return &Block{
 		block:        block,
 		Number:       block.Number().Int64(),
@@ -55,9 +59,13 @@ func NewBlock(client *ethclient.Client, c *context.Context, number uint64) *Bloc
 	}
 }
 
-func QueryTransactions(txs *[]Transaction) {
+func QueryTransactions(txs *[]Transaction, rule []Rule) {
 	for _, tx := range *txs {
-		log.Println(tx.Hash)
+		for _, r := range rule {
+			if r.Check(&tx) {
+				log.Println("Found transaction ", tx.Hash)
+			}
+		}
 	}
 }
 

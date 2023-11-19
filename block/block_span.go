@@ -15,54 +15,40 @@ type QueryEvent struct {
 
 type BlockSpan struct {
 	client         *ethclient.Client
-	From           uint64
-	To             uint64
 	confirm_blocks uint64
-	query_chan     chan QueryEvent
+	QueryChan      chan uint64
 }
 
 func NewBlockSpan(client *ethclient.Client, confirm_blocks uint64) *BlockSpan {
-	return &BlockSpan{client: client, confirm_blocks: confirm_blocks, query_chan: make(chan QueryEvent)}
-}
 
-func (bs *BlockSpan) GetQueryChan() chan QueryEvent {
-	return bs.query_chan
+	return &BlockSpan{
+		client:         client,
+		confirm_blocks: confirm_blocks,
+		QueryChan:      make(chan uint64),
+	}
 }
 
 func (bs *BlockSpan) BlockPoll(c *context.Context) {
 	fmt.Println("Start block poll")
 
 	for {
-		header, err := bs.client.HeaderByNumber(*c, nil)
+		lastestBlockNumber, err := bs.fetchLastestBlock()
 		if err != nil {
 			fmt.Println(err)
+			time.Sleep(3 * time.Second)
 			continue
 		}
-		lastestBlockNumber := header.Number.Uint64()
 		fmt.Println("lastestBlockNumber: ", lastestBlockNumber)
-		bs.refresh(lastestBlockNumber)
-		time.Sleep(5 * time.Second)
+		bs.QueryChan <- lastestBlockNumber - bs.confirm_blocks
+		time.Sleep(3 * time.Second)
 	}
 }
 
-func (bs *BlockSpan) GetLog() string {
-	return fmt.Sprintf("from: %d to: %d", bs.From, bs.To)
-}
-
-func (bs *BlockSpan) refresh(lastestBlockNumber uint64) {
-	if bs.From == 0 {
-		bs.To = lastestBlockNumber - bs.confirm_blocks
-		bs.From = bs.To - 200
-		bs.query_chan <- QueryEvent{From: bs.From, To: bs.To}
-	} else {
-		if bs.To < lastestBlockNumber-bs.confirm_blocks {
-			if (bs.To+1)-(lastestBlockNumber-bs.confirm_blocks) < 1 {
-				return
-			}
-			bs.From = bs.To + 1
-			bs.To = lastestBlockNumber - bs.confirm_blocks
-			bs.query_chan <- QueryEvent{From: bs.From, To: bs.To}
-			return
-		}
+func (bs *BlockSpan) fetchLastestBlock() (uint64, error) {
+	header, err := bs.client.HeaderByNumber(context.Background(), nil)
+	if err != nil {
+		fmt.Println(err)
+		return 0, err
 	}
+	return header.Number.Uint64(), nil
 }
