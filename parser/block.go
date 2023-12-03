@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/leedinh/pluto/model"
 )
 
 type Block struct {
@@ -59,11 +60,14 @@ func NewBlock(client *ethclient.Client, c *context.Context, number uint64) *Bloc
 	}
 }
 
-func QueryTransactions(txs *[]Transaction, rule []Rule) {
+func QueryTransactions(txs *[]Transaction, rule []Rule, tupdate *model.TrackerUpdate) {
 	for _, tx := range *txs {
 		for _, r := range rule {
 			if r.Check(&tx) {
 				log.Println("Found transaction ", tx.Hash)
+				tupdate.Ch <- model.TrackerEvent{
+					EventType: r.Name,
+				}
 			}
 		}
 	}

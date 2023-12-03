@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func GetLogger() zap.Logger {
+func GetLogger() *zap.Logger {
 	zapConfig := zap.NewProductionConfig()
 	zapConfig.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
 	zapConfig.DisableStacktrace = true
@@ -19,5 +19,5 @@ func GetLogger() zap.Logger {
 
 	logger.Info("success setup zap logger")
 
-	return *logger
+	return logger
 }

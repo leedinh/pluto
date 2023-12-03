@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -15,65 +14,73 @@ import (
 	"github.com/leedinh/pluto/logger"
 	"github.com/leedinh/pluto/model"
 	"github.com/leedinh/pluto/parser"
-	"github.com/leedinh/pluto/sc"
 	"github.com/leedinh/pluto/tracker"
+	"go.uber.org/zap"
 )
 
-func main() {
+var (
+	telegramBotToken string
+	logg             *zap.Logger
+	d                *db.Database
+	rpcClient        *ethclient.Client
+)
+
+func init() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
-	telegramBotToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	telegramBotToken = os.Getenv("TELEGRAM_BOT_TOKEN")
 	if telegramBotToken == "" {
 		log.Fatal("TELEGRAM_BOT_TOKEN environment variable is not set")
 	}
 
-	logger := logger.GetLogger()
+	logg = logger.GetLogger()
+	logg.Info("Start Pluto")
 
-	fmt.Println("Start Pluto")
-	db, close, err := db.InitDB()
+	d, _, err = db.InitDB()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer close()
 
-	wl := sc.NewSMWhitelist(db)
-	log.Println(wl.Whitelist)
+	logg.Info("Connect to DB successfully", zap.Any("database", d))
 
-	rpc_client, err := ethclient.Dial("https://api-internal.roninchain.com/rpc")
+	rpcClient, err = ethclient.Dial("https://api-internal.roninchain.com/rpc")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer rpc_client.Close()
-	context := context.Background()
 
-	blockSpan := block.NewBlockSpan(rpc_client, 7)
-	blockTracker := tracker.NewBlockTracker(rpc_client, db.Db, blockSpan, "tracker_1")
+	logg.Info("Connect to RPC successfully", zap.Any("rpcClient", rpcClient))
+}
 
-	// tx := parser.QueryTransactionByHash(rpc_client, &context, "0xf5669b3d863db1a70bfde8f7d0fc148152a28aaf32e2bce55b2683bf9a020643")
-	// log.Println(tx.To)
-	// log.Println(sc.GetContractABI(strings.ToLower(tx.To)))
-	var wg sync.WaitGroup
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	go blockSpan.BlockPoll(&context)
-	fmt.Println("Start block tracker")
+	var trackerQueue []interface{}
+
+	blockSpan := block.NewBlockSpan(rpcClient, 7)
+	eventTracker := tracker.NewBlockTracker(rpcClient, d.Db, blockSpan, "tracker_1")
+	trackerQueue = append(trackerQueue, blockSpan, eventTracker)
+	trackerUpdate := model.NewTrackerUpdate()
+	var trackerWG sync.WaitGroup
 	rules := parser.InitRules()
+
 	go func() {
 		for {
-			select {
-			case comming_block := <-blockSpan.QueryChan:
-				wg.Add(1)
-				go blockTracker.Execute(&context, &wg, comming_block, rules)
-			case <-context.Done():
-				fmt.Println("Done")
-				return
+			for _, item := range trackerQueue {
+				trackerWG.Add(1)
+				switch it := item.(type) {
+				case *block.BlockSpan:
+					go it.BlockPoll(ctx, &trackerWG)
+				case *tracker.BlockTracker:
+					go it.Execute(ctx, &trackerWG, it.BlockSpan.LastestBlockNumber, rules, trackerUpdate)
+				}
 			}
-			wg.Wait()
+			trackerWG.Wait()
 		}
 	}()
 
-	bot := bot.InitBot(telegramBotToken, &logger, model.Flow{}, db)
+	bot := bot.InitBot(telegramBotToken, logg, model.Flow{}, d, trackerUpdate)
 	bot.Start()
-	// <-make(chan struct{})
 }

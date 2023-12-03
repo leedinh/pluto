@@ -5,10 +5,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/boltdb/bolt"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/leedinh/pluto/block"
+	"github.com/leedinh/pluto/model"
 	"github.com/leedinh/pluto/parser"
 	"github.com/leedinh/pluto/utils"
 )
@@ -28,12 +30,12 @@ func NewBlockTracker(client *ethclient.Client, db *bolt.DB, block_span *block.Bl
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Printf("Start block tracker %s at block %d\n", tracker_id, cp)
+	fmt.Printf("Start block tracker %s at block %d\n", tracker_id, cp+1)
 	return &BlockTracker{
 		id:        tracker_id,
 		client:    client,
 		db:        db,
-		cp:        cp,
+		cp:        cp + 1,
 		BlockSpan: block_span,
 	}
 }
@@ -71,13 +73,14 @@ func SaveCheckPointForTracker(d *bolt.DB, id string, cp uint64) error {
 	})
 }
 
-func (bt *BlockTracker) Execute(c *context.Context, wg *sync.WaitGroup, current_block uint64, rules []parser.Rule) {
+func (bt *BlockTracker) Execute(c context.Context, wg *sync.WaitGroup, current_block *uint64, rules []parser.Rule, update *model.TrackerUpdate) {
 	defer wg.Done()
 	wg_block := sync.WaitGroup{}
 	from := bt.cp + 1
-	to := utils.Min(from+100, current_block)
+	latest_block := atomic.LoadUint64(current_block)
+	to := utils.Min(from+100, latest_block)
 	ch := make(chan struct{}, 10)
-	if to-from < 1 {
+	if to <= from {
 		return
 	}
 	fmt.Printf("Execute block tracker %s from %d to %d\n", bt.id, from, to)
@@ -87,8 +90,8 @@ func (bt *BlockTracker) Execute(c *context.Context, wg *sync.WaitGroup, current_
 		go func(block_num uint64) {
 			defer wg_block.Done()
 			fmt.Println("Querying block ", block_num)
-			block := parser.NewBlock(bt.client, c, block_num)
-			parser.QueryTransactions(block.Transactions, rules)
+			// block := parser.NewBlock(bt.client, c, block_num)
+			// parser.QueryTransactions(block.Transactions, rules, update)
 			<-ch
 		}(block_num)
 	}
@@ -98,5 +101,4 @@ func (bt *BlockTracker) Execute(c *context.Context, wg *sync.WaitGroup, current_
 	if err != nil {
 		fmt.Println(err)
 	}
-
 }

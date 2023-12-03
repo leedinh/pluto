@@ -3,7 +3,8 @@ package block
 import (
 	"context"
 	"fmt"
-	"time"
+	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -14,38 +15,34 @@ type QueryEvent struct {
 }
 
 type BlockSpan struct {
-	client         *ethclient.Client
-	confirm_blocks uint64
-	QueryChan      chan uint64
+	client             *ethclient.Client
+	confirm_blocks     uint64
+	LastestBlockNumber *uint64
 }
 
 func NewBlockSpan(client *ethclient.Client, confirm_blocks uint64) *BlockSpan {
 
 	return &BlockSpan{
-		client:         client,
-		confirm_blocks: confirm_blocks,
-		QueryChan:      make(chan uint64),
+		client:             client,
+		LastestBlockNumber: new(uint64),
 	}
 }
 
-func (bs *BlockSpan) BlockPoll(c *context.Context) {
+func (bs *BlockSpan) BlockPoll(c context.Context, wg *sync.WaitGroup) {
 	fmt.Println("Start block poll")
+	defer wg.Done()
 
-	for {
-		lastestBlockNumber, err := bs.fetchLastestBlock()
-		if err != nil {
-			fmt.Println(err)
-			time.Sleep(3 * time.Second)
-			continue
-		}
-		fmt.Println("lastestBlockNumber: ", lastestBlockNumber)
-		bs.QueryChan <- lastestBlockNumber - bs.confirm_blocks
-		time.Sleep(3 * time.Second)
+	lastestBlockNumber, err := bs.fetchLastestBlock(c)
+	if err != nil {
+		fmt.Println(err)
+		return
 	}
+	fmt.Println("lastestBlockNumber: ", lastestBlockNumber)
+	atomic.StoreUint64(bs.LastestBlockNumber, lastestBlockNumber-bs.confirm_blocks)
 }
 
-func (bs *BlockSpan) fetchLastestBlock() (uint64, error) {
-	header, err := bs.client.HeaderByNumber(context.Background(), nil)
+func (bs *BlockSpan) fetchLastestBlock(c context.Context) (uint64, error) {
+	header, err := bs.client.HeaderByNumber(c, nil)
 	if err != nil {
 		fmt.Println(err)
 		return 0, err

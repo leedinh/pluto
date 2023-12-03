@@ -17,9 +17,10 @@ type Bot struct {
 	Logger   *zap.Logger
 	Flow     model.Flow
 	Db       *bolt.DB
+	TUpdate  *model.TrackerUpdate
 }
 
-func InitBot(token string, logger *zap.Logger, flow model.Flow, db *db.Database) *Bot {
+func InitBot(token string, logger *zap.Logger, flow model.Flow, db *db.Database, tupdate *model.TrackerUpdate) *Bot {
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		log.Fatal(err)
@@ -30,6 +31,7 @@ func InitBot(token string, logger *zap.Logger, flow model.Flow, db *db.Database)
 		Logger:   logger,
 		Flow:     flow,
 		Db:       db.Db,
+		TUpdate:  tupdate,
 	}
 }
 
